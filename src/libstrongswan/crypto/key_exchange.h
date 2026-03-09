@@ -73,6 +73,9 @@ enum key_exchange_method_t {
 	ML_KEM_512    = 35,
 	ML_KEM_768    = 36,
 	ML_KEM_1024   = 37,
+	MLEX_KEM_512  = 38,
+	MLEX_KEM_768  = 39,
+	MLEX_KEM_1024 = 40,
 	/** insecure NULL diffie hellman group for testing, in PRIVATE USE */
 	MODP_NULL     = 1024,
 	/** MODP group with custom generator/prime */

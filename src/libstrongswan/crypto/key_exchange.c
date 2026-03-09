@@ -54,7 +54,11 @@ ENUM_NEXT(key_exchange_method_names, MODP_1024_160, ML_KEM_1024, ECP_521_BIT,
 	"ML_KEM_512",
 	"ML_KEM_768",
 	"ML_KEM_1024");
-ENUM_NEXT(key_exchange_method_names, MODP_NULL, MODP_NULL, ML_KEM_1024,
+ENUM_NEXT(key_exchange_method_names, MLEX_KEM_512, MLEX_KEM_1024, ML_KEM_1024,
+	"MLEX_KEM_512",
+	"MLEX_KEM_768",
+	"MLEX_KEM_1024");
+ENUM_NEXT(key_exchange_method_names, MODP_NULL, MODP_NULL, MLEX_KEM_1024,
 	"MODP_NULL");
 ENUM_NEXT(key_exchange_method_names, MODP_CUSTOM, MODP_CUSTOM, MODP_NULL,
 	"MODP_CUSTOM");
@@ -92,7 +96,11 @@ ENUM_NEXT(key_exchange_method_names_short, MODP_1024_160, ML_KEM_1024, ECP_521_B
 	"mlkem512",
 	"mlkem768",
 	"mlkem1024");
-ENUM_NEXT(key_exchange_method_names_short, MODP_NULL, MODP_NULL, ML_KEM_1024,
+ENUM_NEXT(key_exchange_method_names_short, MLEX_KEM_512, MLEX_KEM_1024, ML_KEM_1024,
+	"emlkem512",
+	"emlkem768",
+	"emlkem1024");
+ENUM_NEXT(key_exchange_method_names_short, MODP_NULL, MODP_NULL, MLEX_KEM_1024,
 	"modpnull");
 ENUM_NEXT(key_exchange_method_names_short, MODP_CUSTOM, MODP_CUSTOM, MODP_NULL,
 	"modpcustom");

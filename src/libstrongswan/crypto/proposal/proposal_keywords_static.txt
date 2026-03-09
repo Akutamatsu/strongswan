@@ -181,5 +181,8 @@ gost512,          KEY_EXCHANGE_METHOD, GOST3410_512,               0
 mlkem512,         KEY_EXCHANGE_METHOD, ML_KEM_512,                 0
 mlkem768,         KEY_EXCHANGE_METHOD, ML_KEM_768,                 0
 mlkem1024,        KEY_EXCHANGE_METHOD, ML_KEM_1024,                0
+emlkem512,        KEY_EXCHANGE_METHOD, MLEX_KEM_512,               0
+emlkem768,        KEY_EXCHANGE_METHOD, MLEX_KEM_768,               0
+emlkem1024,       KEY_EXCHANGE_METHOD, MLEX_KEM_1024,              0
 noesn,            EXTENDED_SEQUENCE_NUMBERS, NO_EXT_SEQ_NUMBERS,   0
 esn,              EXTENDED_SEQUENCE_NUMBERS, EXT_SEQ_NUMBERS,      0
