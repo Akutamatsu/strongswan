@@ -633,6 +633,9 @@ bool key_exchange_is_kem(key_exchange_method_t ke)
 		case ML_KEM_512:
 		case ML_KEM_768:
 		case ML_KEM_1024:
+		case MLEX_KEM_512:
+		case MLEX_KEM_768:
+		case MLEX_KEM_1024:
 			return TRUE;
 		default:
 			return FALSE;
