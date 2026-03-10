@@ -705,6 +705,9 @@ bool key_exchange_verify_pubkey(key_exchange_method_t ke, chunk_t value)
 		case ML_KEM_512:
 		case ML_KEM_768:
 		case ML_KEM_1024:
+		case MLEX_KEM_512:
+		case MLEX_KEM_768:
+		case MLEX_KEM_1024:
 			/* verification currently not supported, do in plugin */
 			valid = FALSE;
 			break;
