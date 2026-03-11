@@ -1594,6 +1594,7 @@ ADD_PLUGIN([ctr],                  [s charon scripts nm cmd])
 ADD_PLUGIN([ccm],                  [s charon scripts nm cmd])
 ADD_PLUGIN([gcm],                  [s charon scripts nm cmd])
 ADD_PLUGIN([ml],                   [s charon scripts nm cmd])
+ADD_PLUGIN([mlex],                 [s charon scripts nm cmd])
 ADD_PLUGIN([drbg],                 [s charon swanctl pki scripts nm cmd])
 ADD_PLUGIN([curl],                 [s charon pki scripts nm cmd])
 ADD_PLUGIN([files],                [s charon pki scripts nm cmd])
@@ -1763,6 +1764,7 @@ AM_CONDITIONAL(USE_GCM, test x$gcm = xtrue)
 AM_CONDITIONAL(USE_AF_ALG, test x$af_alg = xtrue)
 AM_CONDITIONAL(USE_DRBG, test x$drbg = xtrue)
 AM_CONDITIONAL(USE_ML, test x$ml = xtrue)
+AM_CONDITIONAL(USE_MLEX, test x$mlex = xtrue)
 
 #  charon plugins
 # ----------------
@@ -2048,6 +2050,7 @@ AC_CONFIG_FILES([
 	src/libstrongswan/plugins/af_alg/Makefile
 	src/libstrongswan/plugins/drbg/Makefile
 	src/libstrongswan/plugins/ml/Makefile
+	src/libstrongswan/plugins/mlex/Makefile
 	src/libstrongswan/plugins/test_vectors/Makefile
 	src/libstrongswan/tests/Makefile
 	src/libipsec/Makefile
