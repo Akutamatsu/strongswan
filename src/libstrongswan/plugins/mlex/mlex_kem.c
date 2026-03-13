@@ -533,7 +533,9 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 {
 	const uint8_t k = this->params->k;
 	const uint8_t eta1 = this->params->eta1;
-
+#if 1 // new codes:
+	const uint8_t dt = this->params->dt;
+#endif
 	uint8_t seeds[2 * ML_KEM_SEED_LEN];
 	uint8_t *rho = seeds;
 	uint8_t *sigma = seeds + ML_KEM_SEED_LEN;
@@ -581,6 +583,7 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 		ntt(this, &s[i]);
 	}
 
+#if 0 // old codes:
 	/* calculate e = NTT(e) */
 	for (i = 0; i < k; i++)
 	{
@@ -593,12 +596,29 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 		multiply_poly_arr(k, &a[i*k], s, &t[i], FALSE);
 	}
 	mlex_poly_add_arr(k, t, e, t);
-
 	/* pack public key and rho */
 	*ek = chunk_alloc(k * ML_KEM_POLY_LEN + ML_KEM_SEED_LEN);
 	encode_poly_arr(k, t, ek->ptr);
 	memcpy(ek->ptr + k * ML_KEM_POLY_LEN, rho, ML_KEM_SEED_LEN);
 
+#else // new codes:
+	/* calculate t = invNTT(A * s) + e to get the public key */
+	for (i = 0; i < k; i++)
+	{
+		multiply_poly_arr(k, &a[i*k], s, &t[i], FALSE);
+	}
+	/* calculate t = invNTT(A * s) */
+	for (i = 0; i < k; i++)
+	{
+		ntt_inv(this, &t[i]);
+	}
+	mlex_poly_add_arr(k, t, e, t);
+	/* pack public key and rho */
+	*ek = chunk_alloc(k * dt * ML_KEM_N / 8 + ML_KEM_SEED_LEN);
+	compress_polys_arr(k, dt, t, ek->ptr);
+	memcpy(ek->ptr + k * dt * ML_KEM_N / 8, rho, ML_KEM_SEED_LEN);
+
+#endif
 	success = TRUE;
 
 err:
@@ -635,7 +655,13 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 		/* decode polynomial t and extract seed rho from the public key */
 		decode_poly_arr(k, ek.ptr, t);
 		memcpy(rho, ek.ptr + k * ML_KEM_POLY_LEN, ML_KEM_SEED_LEN);
-
+#if 1 // new codes:
+		/* calculate t = NTT(t) */
+		for (i = 0; i < k; i++)
+		{
+			ntt(this, &t[i]);
+		}
+#endif
 		/* generate matrix A */
 		if (!generate_a(this, a, rho))
 		{

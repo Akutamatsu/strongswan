@@ -38,6 +38,8 @@ const uint16_t mlex_kem_zetas[128] = {
 	1722, 1212, 1874, 1029, 2110, 2935,  885, 2154,
 };
 
+
+#if 0
 /**
  * Parameter sets for ML-KEM.
  */
@@ -74,7 +76,10 @@ static const mlex_kem_params_t mlex_kem_params[] = {
 	},
 };
 
-#if 0
+#else
+/**
+ * Parameter sets for MLEX-KEM.
+ */
 static const mlex_kem_params_t mlex_kem_params[] = {
 	{
 		.method = MLEX_KEM_512,
