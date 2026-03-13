@@ -16,7 +16,7 @@
 
 /**
  * @defgroup mlex_params mlex_params
- * @{ @ingroup ml_p
+ * @{ @ingroup mlex_p
  */
 
 #ifndef mlex_params_H_

@@ -19,7 +19,7 @@
 /*
  * Described in header
  */
-void ml_assign_cond_int16(int16_t *dst, int16_t val, uint16_t cond)
+void mlex_assign_cond_int16(int16_t *dst, int16_t val, uint16_t cond)
 {
 	cond = -cond;
 	*dst ^= cond & (val ^ *dst);
@@ -28,7 +28,7 @@ void ml_assign_cond_int16(int16_t *dst, int16_t val, uint16_t cond)
 /*
  * Described in header
  */
-uint32_t ml_read_bytes_le(uint8_t *buf, size_t len)
+uint32_t mlex_read_bytes_le(uint8_t *buf, size_t len)
 {
 	uint32_t x = 0;
 	int i;
@@ -43,7 +43,7 @@ uint32_t ml_read_bytes_le(uint8_t *buf, size_t len)
 /*
  * Described in header
  */
-void ml_write_bytes_le(uint8_t *buf, size_t len, uint32_t val)
+void mlex_write_bytes_le(uint8_t *buf, size_t len, uint32_t val)
 {
 	int i;
 

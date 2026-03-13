@@ -40,7 +40,7 @@ struct private_key_exchange_t {
 	/**
 	 * Parameter set.
 	 */
-	const ml_kem_params_t *params;
+	const mlex_kem_params_t *params;
 
 	/**
 	 * Decryption/private key as initiator (array of k polynomials).
@@ -126,7 +126,7 @@ static bool get_random(private_key_exchange_t *this, size_t len, uint8_t *out)
  *
  * Algorithm 7 in FIPS 203.
  */
-static bool sample_ntt(private_key_exchange_t *this, ml_poly_t *ahat)
+static bool sample_ntt(private_key_exchange_t *this, mlex_poly_t *ahat)
 {
 	uint8_t C[3];
 	uint16_t d1, d2;
@@ -155,7 +155,7 @@ static bool sample_ntt(private_key_exchange_t *this, ml_poly_t *ahat)
 /**
  * Generate pseudorandom matrix A or its transposed version A^T.
  */
-static bool generate_a(private_key_exchange_t *this, ml_poly_t *a,
+static bool generate_a(private_key_exchange_t *this, mlex_poly_t *a,
 					   uint8_t *rho)
 {
 	const uint8_t k = this->params->k;
@@ -190,7 +190,7 @@ static bool generate_a(private_key_exchange_t *this, ml_poly_t *a,
  * Algorithm 8 in FIPS 203.
  */
 static void sample_poly_cbd(private_key_exchange_t *this, uint8_t eta,
-							uint8_t *s, uint8_t N, ml_poly_t *p)
+							uint8_t *s, uint8_t N, mlex_poly_t *p)
 {
 	/* this uses an optimization from the reference implementation. since eta
 	 * can only take two values for the current parameter sets (it's actually 2
@@ -219,7 +219,7 @@ static void sample_poly_cbd(private_key_exchange_t *this, uint8_t eta,
 	for (i = 0; i < ML_KEM_N/coeffs; i++)
 	{
 		/* get a bit stream from the seed */
-		t = ml_read_bytes_le(sample_seed + fetch*i, fetch);
+		t = mlex_read_bytes_le(sample_seed + fetch*i, fetch);
 
 		/* add together eta consecutive bits */
 		b = t & add_mask;
@@ -233,7 +233,7 @@ static void sample_poly_cbd(private_key_exchange_t *this, uint8_t eta,
 		{
 			x = (b >> (2*j*eta)) & mask;
 			y = (b >> (2*j*eta + eta)) & mask;
-			p->f[coeffs*i + j] = ml_reduce_modq(x - y + ML_KEM_Q);
+			p->f[coeffs*i + j] = mlex_reduce_modq(x - y + ML_KEM_Q);
 		}
 	}
 
@@ -264,7 +264,7 @@ static uint16_t mul_modq(uint16_t a, uint16_t b)
  *
  * Algorithm 9 in FIPS 203.
  */
-static void ntt(private_key_exchange_t *this, ml_poly_t *p)
+static void ntt(private_key_exchange_t *this, mlex_poly_t *p)
 {
 	int len, start, i = 1, j;
 	uint16_t zeta, t;
@@ -273,12 +273,12 @@ static void ntt(private_key_exchange_t *this, ml_poly_t *p)
 	{
 		for (start = 0; start < ML_KEM_N; start += 2 * len)
 		{
-			zeta = ml_kem_zetas[i++];
+			zeta = mlex_kem_zetas[i++];
 			for (j = start; j < start + len; j++)
 			{
 				t = mul_modq(zeta, p->f[j + len]);
-				p->f[j + len] = ml_reduce_modq(p->f[j] - t + ML_KEM_Q);
-				p->f[j] = ml_reduce_modq(p->f[j] + t);
+				p->f[j + len] = mlex_reduce_modq(p->f[j] - t + ML_KEM_Q);
+				p->f[j] = mlex_reduce_modq(p->f[j] + t);
 			}
 		}
 	}
@@ -290,7 +290,7 @@ static void ntt(private_key_exchange_t *this, ml_poly_t *p)
  *
  * Algorithm 10 in FIPS 203.
  */
-static void ntt_inv(private_key_exchange_t *this, ml_poly_t *p)
+static void ntt_inv(private_key_exchange_t *this, mlex_poly_t *p)
 {
 	const uint16_t f = 3303;
 
@@ -301,11 +301,11 @@ static void ntt_inv(private_key_exchange_t *this, ml_poly_t *p)
 	{
 		for (start = 0; start < ML_KEM_N; start += 2 * len)
 		{
-			zeta = ml_kem_zetas[i--];
+			zeta = mlex_kem_zetas[i--];
 			for (j = start; j < start + len; j++)
 			{
 				t = p->f[j];
-				p->f[j] = ml_reduce_modq(t + p->f[j + len]);
+				p->f[j] = mlex_reduce_modq(t + p->f[j + len]);
 				p->f[j + len] = mul_modq(zeta, p->f[j + len] - t + ML_KEM_Q);
 			}
 		}
@@ -326,8 +326,8 @@ static void base_case_multiply(uint16_t *a, uint16_t *b, uint16_t *c,
 							   uint16_t gamma)
 {
 	c[0] = mul_modq(a[1], b[1]);
-	c[0] = ml_reduce_modq(mul_modq(c[0], gamma) + mul_modq(a[0], b[0]));
-	c[1] = ml_reduce_modq(mul_modq(a[0], b[1])  + mul_modq(a[1], b[0]));
+	c[0] = mlex_reduce_modq(mul_modq(c[0], gamma) + mul_modq(a[0], b[0]));
+	c[1] = mlex_reduce_modq(mul_modq(a[0], b[1])  + mul_modq(a[1], b[0]));
 }
 
 /**
@@ -335,7 +335,7 @@ static void base_case_multiply(uint16_t *a, uint16_t *b, uint16_t *c,
  *
  * Algorithm 11 in FIPS 203.
  */
-static void multiply_poly(ml_poly_t *a, ml_poly_t *b, ml_poly_t *c)
+static void multiply_poly(mlex_poly_t *a, mlex_poly_t *b, mlex_poly_t *c)
 {
 	int i;
 
@@ -345,9 +345,9 @@ static void multiply_poly(ml_poly_t *a, ml_poly_t *b, ml_poly_t *c)
 	for (i = 0; i < ML_KEM_N/4; i++)
 	{
 		base_case_multiply(&a->f[4*i], &b->f[4*i], &c->f[4*i],
-						   ml_kem_zetas[i+64]);
+						   mlex_kem_zetas[i+64]);
 		base_case_multiply(&a->f[4*i+2], &b->f[4*i+2], &c->f[4*i+2],
-						   ML_KEM_Q - ml_kem_zetas[i+64]);
+						   ML_KEM_Q - mlex_kem_zetas[i+64]);
 	}
 }
 
@@ -359,27 +359,27 @@ static void multiply_poly(ml_poly_t *a, ml_poly_t *b, ml_poly_t *c)
  *
  * See the note regarding the result of multiply_poly().
  */
-static void multiply_poly_arr(uint8_t k, ml_poly_t *a, ml_poly_t *b,
-							  ml_poly_t *c, bool transposed)
+static void multiply_poly_arr(uint8_t k, mlex_poly_t *a, mlex_poly_t *b,
+							  mlex_poly_t *c, bool transposed)
 {
-	ml_poly_t t;
+	mlex_poly_t t;
 	int i, f = transposed ? k : 1;
 
 	multiply_poly(&a[0], &b[0], c);
 	for (i = 1; i < k; i++)
 	{
 		multiply_poly(&a[i*f], &b[i], &t);
-		ml_poly_add(c, &t, c);
+		mlex_poly_add(c, &t, c);
 	}
 }
 
 /**
  * Encode k polynomials to a byte array (12-bit version that packs 2
- * coefficients into 3 bytes, not using ml_bitpacker_t for performance reasons).
+ * coefficients into 3 bytes, not using mlex_bitpacker_t for performance reasons).
  *
  * Algorithm 5 in FIPS 203.
  */
-static void encode_poly_arr(uint8_t k, ml_poly_t *a, uint8_t *out)
+static void encode_poly_arr(uint8_t k, mlex_poly_t *a, uint8_t *out)
 {
 	uint16_t f0, f1;
 	int i, j;
@@ -400,11 +400,11 @@ static void encode_poly_arr(uint8_t k, ml_poly_t *a, uint8_t *out)
 
 /**
  * Decode k polynomials from a byte array (12-bit version that unpacks 2
- * coefficients from 3 bytes, not using ml_bitpacker_t for performance reasons).
+ * coefficients from 3 bytes, not using mlex_bitpacker_t for performance reasons).
  *
  * Algorithm 6 in FIPS 203.
  */
-static void decode_poly_arr(uint8_t k, uint8_t *in, ml_poly_t *a)
+static void decode_poly_arr(uint8_t k, uint8_t *in, mlex_poly_t *a)
 {
 	int i, j;
 
@@ -423,18 +423,18 @@ static void decode_poly_arr(uint8_t k, uint8_t *in, ml_poly_t *a)
  * Compress the k 12-bit polynomials in a to d bits and encode the result as
  * bytes in out.
  */
-static void compress_polys_arr(uint8_t k, uint8_t d, ml_poly_t *a, uint8_t *out)
+static void compress_polys_arr(uint8_t k, uint8_t d, mlex_poly_t *a, uint8_t *out)
 {
 	/* avoid division by replacing 2^d/q with [m/2^p] where m is [2^(p+d)/q] */
 	const int p = 63 - d;
 	const uint64_t m = ((1ULL << (p+d)) + ML_KEM_Q/2) / ML_KEM_Q;
 	const uint64_t mask = (1 << d) - 1;
 
-	ml_bitpacker_t *packer;
+	mlex_bitpacker_t *packer;
 	uint64_t f;
 	int i, j;
 
-	packer = ml_bitpacker_create(chunk_create(out, k * d * ML_KEM_N / 8));
+	packer = mlex_bitpacker_create(chunk_create(out, k * d * ML_KEM_N / 8));
 	for (i = 0; i < k; i++)
 	{
 		for (j = 0; j < ML_KEM_N; j++)
@@ -451,15 +451,15 @@ static void compress_polys_arr(uint8_t k, uint8_t d, ml_poly_t *a, uint8_t *out)
 /**
  * Decompress the k 12-bit polynomials in a from a stream of d-bit chunks.
  */
-static void decompress_poly_arr(uint8_t k, uint8_t d, uint8_t *in, ml_poly_t *a)
+static void decompress_poly_arr(uint8_t k, uint8_t d, uint8_t *in, mlex_poly_t *a)
 {
 	const uint16_t rounding = 1 << (d - 1);
 
-	ml_bitpacker_t *packer;
+	mlex_bitpacker_t *packer;
 	uint32_t f;
 	int i, j;
 
-	packer = ml_bitpacker_create_from_data(chunk_create(in, k * d * ML_KEM_N / 8));
+	packer = mlex_bitpacker_create_from_data(chunk_create(in, k * d * ML_KEM_N / 8));
 	for (i = 0; i < k; i++)
 	{
 		for (j = 0; j < ML_KEM_N; j++)
@@ -476,7 +476,7 @@ static void decompress_poly_arr(uint8_t k, uint8_t d, uint8_t *in, ml_poly_t *a)
  * Calculates Decompress_1(ByteDecode_1()) for the given message m of length
  * ML_KEM_SEED_LEN and puts the result into p.
  */
-static void message_to_poly(uint8_t *m, ml_poly_t *p)
+static void message_to_poly(uint8_t *m, mlex_poly_t *p)
 {
 	int i, j;
 
@@ -491,7 +491,7 @@ static void message_to_poly(uint8_t *m, ml_poly_t *p)
 			 * optimize this with a branching instruction to just skip over the
 			 * assignment, creating a possible side-channel */
 			p->f[8 * i + j] = 0;
-			ml_assign_cond_int16(&p->f[8 * i + j], (ML_KEM_Q + 1) / 2,
+			mlex_assign_cond_int16(&p->f[8 * i + j], (ML_KEM_Q + 1) / 2,
 								 (m[i] >> j) & 0x1);
 		}
 	}
@@ -501,7 +501,7 @@ static void message_to_poly(uint8_t *m, ml_poly_t *p)
  * Calculates ByteEncode_1(Compress_1()) for the given polynomial p to decode
  * message m of length ML_KEM_SEED_LEN.
  */
-static void poly_to_message(ml_poly_t *p, uint8_t *m)
+static void poly_to_message(mlex_poly_t *p, uint8_t *m)
 {
 	/* avoid division by replacing 2/q with [n/2^k] where n is [2^(k+1)/q] */
 	const int k = 30;
@@ -538,7 +538,7 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 	uint8_t *rho = seeds;
 	uint8_t *sigma = seeds + ML_KEM_SEED_LEN;
 	uint8_t N = 0;
-	ml_poly_t *a, *s, e[k], *t;
+	mlex_poly_t *a, *s, e[k], *t;
 	int i;
 	bool success = FALSE;
 
@@ -550,9 +550,9 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 		goto err;
 	}
 
-	this->public_key = chunk_alloc((k+1) * k * sizeof(ml_poly_t));
-	t = (ml_poly_t*)this->public_key.ptr;
-	a = (ml_poly_t*)this->public_key.ptr + k;
+	this->public_key = chunk_alloc((k+1) * k * sizeof(mlex_poly_t));
+	t = (mlex_poly_t*)this->public_key.ptr;
+	a = (mlex_poly_t*)this->public_key.ptr + k;
 
 	/* generate matrix A */
 	if (!generate_a(this, a, rho))
@@ -560,8 +560,8 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 		goto err;
 	}
 
-	this->private_key = chunk_alloc(k * sizeof(ml_poly_t));
-	s = (ml_poly_t*)this->private_key.ptr;
+	this->private_key = chunk_alloc(k * sizeof(mlex_poly_t));
+	s = (mlex_poly_t*)this->private_key.ptr;
 
 	/* sample s from CBD using noise seed sigma and nonce N as input */
 	for (i = 0; i < k; i++)
@@ -592,7 +592,7 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 	{
 		multiply_poly_arr(k, &a[i*k], s, &t[i], FALSE);
 	}
-	ml_poly_add_arr(k, t, e, t);
+	mlex_poly_add_arr(k, t, e, t);
 
 	/* pack public key and rho */
 	*ek = chunk_alloc(k * ML_KEM_POLY_LEN + ML_KEM_SEED_LEN);
@@ -625,8 +625,8 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 
 	uint8_t rho[ML_KEM_SEED_LEN];
 	uint8_t N = 0;
-	ml_poly_t a_gen[k*k], *a = a_gen, t_dec[k], *t = t_dec;
-	ml_poly_t y[k], e1[k], e2, u[k], mu, v;
+	mlex_poly_t a_gen[k*k], *a = a_gen, t_dec[k], *t = t_dec;
+	mlex_poly_t y[k], e1[k], e2, u[k], mu, v;
 	int i;
 	bool success = FALSE;
 
@@ -645,8 +645,8 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 	else
 	{
 		/* as initiator, we already have the decoded polynomial and matrix A */
-		t = (ml_poly_t*)this->public_key.ptr;
-		a = (ml_poly_t*)this->public_key.ptr + k;
+		t = (mlex_poly_t*)this->public_key.ptr;
+		a = (mlex_poly_t*)this->public_key.ptr + k;
 	}
 
 	/* sample y from CBD using noise seed r and nonce N as input */
@@ -679,7 +679,7 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 	{
 		ntt_inv(this, &u[i]);
 	}
-	ml_poly_add_arr(k, u, e1, u);
+	mlex_poly_add_arr(k, u, e1, u);
 
 	/* prepare plaintext message m */
 	message_to_poly(m, &mu);
@@ -687,8 +687,8 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 	/* calculate v = NTT^-1(t^T * y) + e_2 + mu to encrypt the plaintext */
 	multiply_poly_arr(k, t, y, &v, FALSE);
 	ntt_inv(this, &v);
-	ml_poly_add(&v, &e2, &v);
-	ml_poly_add(&v, &mu, &v);
+	mlex_poly_add(&v, &e2, &v);
+	mlex_poly_add(&v, &mu, &v);
 
 	/* encode u as c1 and v as c2, the two parts of the ciphertext */
 	compress_polys_arr(k, du, u, ciphertext.ptr);
@@ -715,7 +715,7 @@ static bool pke_decrypt(private_key_exchange_t *this, chunk_t ciphertext,
 	const uint8_t du = this->params->du;
 	const uint8_t dv = this->params->dv;
 
-	ml_poly_t *s, u[k], v, w;
+	mlex_poly_t *s, u[k], v, w;
 	int i;
 
 	/* decode u and v from c1 and c2, the two parts of the ciphertext */
@@ -723,7 +723,7 @@ static bool pke_decrypt(private_key_exchange_t *this, chunk_t ciphertext,
 	decompress_poly_arr(1, dv, ciphertext.ptr + k * du * ML_KEM_N / 8, &v);
 
 	/* we already have private key s stored */
-	s = (ml_poly_t*)this->private_key.ptr;
+	s = (mlex_poly_t*)this->private_key.ptr;
 
 	/* calculate w = v - NTT^-1(s * NTT(u)) */
 	for (i = 0; i < k; i++)
@@ -732,7 +732,7 @@ static bool pke_decrypt(private_key_exchange_t *this, chunk_t ciphertext,
 	}
 	multiply_poly_arr(k, s, u, &w, FALSE);
 	ntt_inv(this, &w);
-	ml_poly_sub(&v, &w, &w);
+	mlex_poly_sub(&v, &w, &w);
 
 	/* decode plaintext message m from polynomial w */
 	poly_to_message(&w, m);
@@ -892,7 +892,7 @@ static bool validate_public_key(private_key_exchange_t *this, chunk_t public)
 {
 	const uint8_t k = this->params->k;
 
-	ml_poly_t p[k];
+	mlex_poly_t p[k];
 	uint8_t ek[k * ML_KEM_POLY_LEN];
 
 	decode_poly_arr(k, public.ptr, p);
@@ -982,7 +982,7 @@ METHOD(key_exchange_t, destroy, void,
 key_exchange_t *mlex_kem_create(key_exchange_method_t method)
 {
 	private_key_exchange_t *this;
-	const ml_kem_params_t *params;
+	const mlex_kem_params_t *params;
 
 	params = mlex_kem_params_get(method);
 	if (!params)

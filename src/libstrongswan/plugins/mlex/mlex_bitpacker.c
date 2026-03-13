@@ -18,17 +18,17 @@
 #include "mlex_bitpacker.h"
 #include "mlex_utils.h"
 
-typedef struct private_ml_bitpacker_t private_ml_bitpacker_t;
+typedef struct private_mlex_bitpacker_t private_mlex_bitpacker_t;
 
 /**
  * Private data.
  */
-struct private_ml_bitpacker_t {
+struct private_mlex_bitpacker_t {
 
 	/**
 	 * Public interface.
 	 */
-	ml_bitpacker_t public;
+	mlex_bitpacker_t public;
 
 	/**
 	 * Bit buffer for up to 32 bits.
@@ -54,16 +54,16 @@ struct private_ml_bitpacker_t {
 /**
  * Write the bytes in the bit buffer to the output buffer.
  */
-static void flush_buffer(private_ml_bitpacker_t *this)
+static void flush_buffer(private_mlex_bitpacker_t *this)
 {
 	size_t to_write = min(4, this->pos.len);
 
-	ml_write_bytes_le(this->pos.ptr, to_write, this->bits_buf);
+	mlex_write_bytes_le(this->pos.ptr, to_write, this->bits_buf);
 	this->pos = chunk_skip(this->pos, to_write);
 }
 
-METHOD(ml_bitpacker_t, write_bits, bool,
-	private_ml_bitpacker_t *this, uint32_t value, size_t bits)
+METHOD(mlex_bitpacker_t, write_bits, bool,
+	private_mlex_bitpacker_t *this, uint32_t value, size_t bits)
 {
 	if (!bits)
 	{
@@ -101,8 +101,8 @@ METHOD(ml_bitpacker_t, write_bits, bool,
 	}
 }
 
-METHOD(ml_bitpacker_t, read_bits, bool,
-	private_ml_bitpacker_t *this, uint32_t *value, size_t bits)
+METHOD(mlex_bitpacker_t, read_bits, bool,
+	private_mlex_bitpacker_t *this, uint32_t *value, size_t bits)
 {
 	size_t to_read, written = 0;
 
@@ -121,7 +121,7 @@ METHOD(ml_bitpacker_t, read_bits, bool,
 				return FALSE;
 			}
 			to_read = min(4, this->pos.len);
-			this->bits_buf = ml_read_bytes_le(this->pos.ptr, to_read);
+			this->bits_buf = mlex_read_bytes_le(this->pos.ptr, to_read);
 			this->pos = chunk_skip(this->pos, to_read);
 			this->bits_left = 8 * to_read;
 		}
@@ -139,8 +139,8 @@ METHOD(ml_bitpacker_t, read_bits, bool,
 	}
 }
 
-METHOD(ml_bitpacker_t, destroy, void,
-	private_ml_bitpacker_t *this)
+METHOD(mlex_bitpacker_t, destroy, void,
+	private_mlex_bitpacker_t *this)
 {
 	if (this->public.write_bits == _write_bits &&
 		this->bits_left < 32)
@@ -153,9 +153,9 @@ METHOD(ml_bitpacker_t, destroy, void,
 /*
  * Described in header
  */
-ml_bitpacker_t *ml_bitpacker_create(chunk_t dst)
+mlex_bitpacker_t *mlex_bitpacker_create(chunk_t dst)
 {
-	private_ml_bitpacker_t *this;
+	private_mlex_bitpacker_t *this;
 
 	INIT(this,
 		.public = {
@@ -175,9 +175,9 @@ ml_bitpacker_t *ml_bitpacker_create(chunk_t dst)
 /*
  * Described in header
  */
-ml_bitpacker_t *ml_bitpacker_create_from_data(chunk_t data)
+mlex_bitpacker_t *mlex_bitpacker_create_from_data(chunk_t data)
 {
-	private_ml_bitpacker_t *this;
+	private_mlex_bitpacker_t *this;
 
 	INIT(this,
 		.public = {

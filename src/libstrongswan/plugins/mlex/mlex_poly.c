@@ -20,37 +20,37 @@
 /*
  * Described in header
  */
-void ml_poly_add(ml_poly_t *a, ml_poly_t *b, ml_poly_t *res)
+void mlex_poly_add(mlex_poly_t *a, mlex_poly_t *b, mlex_poly_t *res)
 {
 	int i;
 
 	for (i = 0; i < ML_KEM_N; i++)
 	{
-		res->f[i] = ml_reduce_modq(a->f[i] + b->f[i]);
+		res->f[i] = mlex_reduce_modq(a->f[i] + b->f[i]);
 	}
 }
 
 /*
  * Described in header
  */
-void ml_poly_add_arr(u_int k, ml_poly_t *a, ml_poly_t *b, ml_poly_t *res)
+void mlex_poly_add_arr(u_int k, mlex_poly_t *a, mlex_poly_t *b, mlex_poly_t *res)
 {
 	while (k--)
 	{
-		ml_poly_add(&a[k], &b[k], &res[k]);
+		mlex_poly_add(&a[k], &b[k], &res[k]);
 	}
 }
 
 /*
  * Described in header
  */
-void ml_poly_sub(ml_poly_t *a, ml_poly_t *b, ml_poly_t *res)
+void mlex_poly_sub(mlex_poly_t *a, mlex_poly_t *b, mlex_poly_t *res)
 {
 	int i;
 
 	for (i = 0; i < ML_KEM_N; i++)
 	{
-		res->f[i] = ml_reduce_modq(a->f[i] - b->f[i] + ML_KEM_Q);
+		res->f[i] = mlex_reduce_modq(a->f[i] - b->f[i] + ML_KEM_Q);
 	}
 }
 
