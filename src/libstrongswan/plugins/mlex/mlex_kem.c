@@ -618,6 +618,11 @@ static bool pke_keygen(private_key_exchange_t *this, chunk_t d, chunk_t *ek)
 	compress_polys_arr(k, dt, t, ek->ptr);
 	memcpy(ek->ptr + k * dt * ML_KEM_N / 8, rho, ML_KEM_SEED_LEN);
 
+	/* store t = NTT(t) into this->public_key.ptr */
+	for (i = 0; i < k; i++)
+	{
+		ntt(this, &t[i]);
+	}
 #endif
 	success = TRUE;
 
