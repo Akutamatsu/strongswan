@@ -32,7 +32,7 @@
  */
 static inline uint16_t mlex_reduce_modq(uint16_t a)
 {
-	const uint16_t diff = a - mlex_KEM_Q;
+	const uint16_t diff = a - ML_KEM_Q;
 	uint16_t mask = 0 - (diff >> 15);
 
 	return (mask & a) | (~mask & diff);

@@ -35,7 +35,7 @@ struct mlex_poly_t {
 	/**
 	 * Coefficients of the polynomial.
 	 */
-	uint16_t f[mlex_KEM_N];
+	uint16_t f[ML_KEM_N];
 };
 
 /**
