@@ -690,6 +690,13 @@ if MONOLITHIC
 endif
 endif
 
+if USE_MLEX
+  SUBDIRS += plugins/mlex
+if MONOLITHIC
+  libstrongswan_la_LIBADD += plugins/mlex/libstrongswan-mlex.la
+endif
+endif
+
 if USE_TEST_VECTORS
   SUBDIRS += plugins/test_vectors
 if MONOLITHIC
