@@ -372,7 +372,7 @@ static void multiply_poly_arr(uint8_t k, mlex_poly_t *a, mlex_poly_t *b,
 		mlex_poly_add(c, &t, c);
 	}
 }
-
+#if 0 // old codes:
 /**
  * Encode k polynomials to a byte array (12-bit version that packs 2
  * coefficients into 3 bytes, not using mlex_bitpacker_t for performance reasons).
@@ -418,7 +418,7 @@ static void decode_poly_arr(uint8_t k, uint8_t *in, mlex_poly_t *a)
 		in += ML_KEM_POLY_LEN;
 	}
 }
-
+#endif
 /**
  * Compress the k 12-bit polynomials in a to d bits and encode the result as
  * bytes in out.
