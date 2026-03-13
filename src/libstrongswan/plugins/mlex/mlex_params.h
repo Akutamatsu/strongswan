@@ -72,6 +72,11 @@ struct mlex_kem_params_t {
 	const uint8_t eta2;
 
 	/**
+	 * Parameter dt for compression/encoding.
+	 */
+	const uint8_t dt;
+
+	/**
 	 * Parameter du for compression/encoding.
 	 */
 	const uint8_t du;
