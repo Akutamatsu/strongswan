@@ -642,6 +642,9 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 	const uint8_t eta2 = this->params->eta2;
 	const uint8_t du = this->params->du;
 	const uint8_t dv = this->params->dv;
+#if 1 // new codes:
+	const uint8_t dt = this->params->dt;
+#endif
 
 	uint8_t rho[ML_KEM_SEED_LEN];
 	uint8_t N = 0;
@@ -653,9 +656,12 @@ static bool pke_encrypt(private_key_exchange_t *this, chunk_t ek, uint8_t *m,
 	if (!this->public_key.ptr)
 	{
 		/* decode polynomial t and extract seed rho from the public key */
+#if 0 // old codes:
 		decode_poly_arr(k, ek.ptr, t);
 		memcpy(rho, ek.ptr + k * ML_KEM_POLY_LEN, ML_KEM_SEED_LEN);
-#if 1 // new codes:
+#else // new codes:
+		decompress_poly_arr(k, dt, ek.ptr, t);
+		memcpy(rho, ek.ptr + k * dt * ML_KEM_N / 8, ML_KEM_SEED_LEN);
 		/* calculate t = NTT(t) */
 		for (i = 0; i < k; i++)
 		{
@@ -919,10 +925,16 @@ static bool validate_public_key(private_key_exchange_t *this, chunk_t public)
 	const uint8_t k = this->params->k;
 
 	mlex_poly_t p[k];
+#if 0 // old codes:
 	uint8_t ek[k * ML_KEM_POLY_LEN];
-
 	decode_poly_arr(k, public.ptr, p);
 	encode_poly_arr(k, p, ek);
+#else // new codes:
+	const uint8_t dt = this->params->dt;
+	uint8_t ek[k * dt * ML_KEM_N / 8];
+	decompress_poly_arr(k, dt, public.ptr, p);
+	compress_polys_arr(k, dt, p, ek);
+#endif
 	return memeq_const(public.ptr, ek, sizeof(ek));
 }
 
