@@ -135,6 +135,11 @@ struct private_ike_init_t {
 	u_int retry;
 
 	/**
+	 * Retries due to key exchange public key application failure
+	 */
+	u_int ke_failed_retries;
+
+	/**
 	 * Whether to use Signature Authentication as per RFC 7427
 	 */
 	bool signature_authentication;
@@ -1436,7 +1441,21 @@ METHOD(task_t, process_i, status_t,
 	}
 
 	if (this->ke_failed)
-	{
+	{ // New codes added for allowing Decryption Failure retries in IKE_SA_INIT
+		uint32_t max_retries;
+
+		max_retries = lib->settings->get_int(lib->settings,
+								"%s.max_ike_init_retries", 1, lib->ns);
+
+		if (max_retries > 0 && this->ke_failed_retries < max_retries)
+		{
+			DBG1(DBG_IKE, "applying key exchange public value failed, "
+				 "retrying IKE_SA_INIT (attempt %d/%d)",
+				 this->ke_failed_retries + 1, max_retries);
+			this->ike_sa->reset(this->ike_sa, FALSE);
+			this->ke_failed_retries++;
+			return NEED_MORE;
+		}
 		DBG1(DBG_IKE, "applying key exchange public value failed");
 		return FAILED;
 	}
