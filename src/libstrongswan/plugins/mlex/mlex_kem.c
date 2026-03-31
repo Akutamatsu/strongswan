@@ -980,13 +980,13 @@ err:
  */
 static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 {
-	chunk_t mH = chunk_alloca(2*ML_KEM_SEED_LEN);
-	chunk_t pke_ciphertext, mac_tag, mct;
+	chunk_t mr = chunk_alloca(2*ML_KEM_SEED_LEN);
+	chunk_t m, r, pke_ciphertext, mac_tag, mct;
 	uint32_t pke_ct_len;
 	bool success = FALSE;
 
 	/* get a random message (m, r) */
-	if (!get_random(this, 2*ML_KEM_SEED_LEN, mH.ptr))
+	if (!get_random(this, 2*ML_KEM_SEED_LEN, mr.ptr))
 	{
 		goto err;
 	}
@@ -1006,15 +1006,20 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 				pke_ct_len, &pke_ciphertext,
 				ML_KEM_TAG_LEN, &mac_tag);
 
+	/* split the buffer into msg and random coins */
+	chunk_split(mr, "mm",
+				ML_KEM_SEED_LEN, &m,
+				ML_KEM_SEED_LEN, &r);
+
 	/* encrypt the message using random r */
-	if (!pke_encrypt(this, public, mH.ptr, mH.ptr + ML_KEM_SEED_LEN, pke_ciphertext))
+	if (!pke_encrypt(this, public, m.ptr, r.ptr, pke_ciphertext))
 	{
 		goto err;
 	}
 
 	/* compute HMAC-SHA3-256 authentication tag over ciphertext part */
 	if (!compute_hmac_sha3_256(this->H, 
-						   chunk_create(mH.ptr, ML_KEM_SEED_LEN),
+						   m,
 						   pke_ciphertext, 
 						   mac_tag))
 	{
@@ -1022,7 +1027,7 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 	}
 
 	/* concatenate the key derivation material (using complete KEM ciphertext) */
-	mct = chunk_cat("cc", mH.ptr, this->ciphertext);
+	mct = chunk_cat("cc", m, this->ciphertext);
 	if (!mct.ptr)
 	{
 		DBG1(DBG_LIB, "failed to concatenate KDF material");
@@ -1045,7 +1050,7 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 	success = TRUE;
 
 err:
-	memwipe(mH.ptr, 2*ML_KEM_SEED_LEN);
+	memwipe(mr.ptr, 2*ML_KEM_SEED_LEN);
 	chunk_clear(&mct);
 	return success;
 }
