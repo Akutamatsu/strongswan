@@ -925,6 +925,11 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 
 	/* prepare the seed to derive the implicit rejection secret (using PKE ciphertext only) */
 	zct = chunk_cat("cc", z, ciphertext);
+	if (!zct.ptr)
+	{
+		DBG1(DBG_LIB, "failed to concatenate z and ciphertext");
+		goto err;
+	}
 
 	/* decrypt message m using only the PKE ciphertext */
 	if (!pke_decrypt(this, pke_ciphertext, m.ptr))
@@ -942,10 +947,15 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 	}
 
 	this->shared_secret = chunk_alloc(ML_KEM_SEED_LEN);
+	if (!this->shared_secret.ptr)
+	{
+		DBG1(DBG_LIB, "failed to allocate shared secret");
+		goto err;
+	}
 
 	/* replace the rejection seed with real decrypted message based on whether re-computed MAC tag matches the received one, using a constant-time conditional copy to avoid side-channels */
-	memcpy_cond(zct.ptr, m.ptr, this->shared_secret.len,
-				memeq_const(tag_received.ptr, tag_computed.ptr, ML_KEM_TAG_LEN));
+	memcpy_cond(zct.ptr, m.ptr, m.len,
+				chunk_equals_const(tag_received, tag_computed));
 
 	/* calculate the rejection value K_rej = J(z||c) as fallback */
 	if (!this->shake256->set_seed(this->shake256, zct) ||
@@ -1013,8 +1023,18 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 
 	/* concatenate the key derivation material (using complete KEM ciphertext) */
 	mct = chunk_cat("cc", mH.ptr, this->ciphertext);
+	if (!mct.ptr)
+	{
+		DBG1(DBG_LIB, "failed to concatenate KDF material");
+		goto err;
+	}
 
 	this->shared_secret = chunk_alloc(ML_KEM_SEED_LEN);
+	if (!this->shared_secret.ptr)
+	{
+		DBG1(DBG_LIB, "failed to allocate shared secret");
+		goto err;
+	}
 	/* derive K = J(m||ct) */
 	if (!this->shake256->set_seed(this->shake256, mct) ||
 		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
@@ -1026,6 +1046,7 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 
 err:
 	memwipe(mH.ptr, 2*ML_KEM_SEED_LEN);
+	chunk_clear(&mct);
 	return success;
 }
 
