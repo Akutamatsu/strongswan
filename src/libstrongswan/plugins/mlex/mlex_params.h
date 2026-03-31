@@ -42,6 +42,11 @@ typedef struct mlex_kem_params_t mlex_kem_params_t;
 #define ML_KEM_SEED_LEN 32
 
 /**
+ * Length of MAC tag as failure indicator. SHA3-256 output is 32 bytes.
+ */
+#define ML_KEM_TAG_LEN 32
+
+/**
  * Length of an enoded polynomial (used for the public key).
  */
 #define ML_KEM_POLY_LEN 384

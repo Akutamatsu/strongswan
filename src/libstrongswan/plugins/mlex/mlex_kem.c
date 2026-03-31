@@ -743,6 +743,73 @@ err:
 }
 
 /**
+ * Compute HMAC-SHA3-256 over data using a key.
+ * HMAC(K, msg) = H((K XOR opad) || H((K XOR ipad) || msg))
+ *
+ * @param hasher	SHA3-256 hasher instance
+ * @param key		HMAC key
+ * @param data		data to authenticate
+ * @param mac		output buffer for MAC (must be 32 bytes)
+ * @return			TRUE if MAC computed successfully
+ */
+static bool compute_hmac_sha3_256(hasher_t *hasher, chunk_t key, 
+					   chunk_t data, chunk_t mac)
+{
+	const uint8_t ipad = 0x36;
+	const uint8_t opad = 0x5c;
+	size_t hash_len = 32; /* SHA3-256 output is 32 bytes */
+	size_t block_len = 136; /* SHA3-256 block size (1088 bits / 8) */
+	uint8_t ipad_key[136];
+	uint8_t opad_key[136];
+	uint8_t inner_hash[32];
+	size_t i;
+
+	/* Initialize ipad and opad buffers */
+	memset(ipad_key, ipad, block_len);
+	memset(opad_key, opad, block_len);
+
+	/* XOR key with ipad and opad (pad key to block size if needed) */
+	for (i = 0; i < key.len && i < block_len; i++)
+	{
+		ipad_key[i] ^= key.ptr[i];
+		opad_key[i] ^= key.ptr[i];
+	}
+
+	/* Compute inner hash: H(ipad_key || data) */
+	if (!hasher->reset(hasher))
+	{
+		return FALSE;
+	}
+	if (!hasher->get_hash(hasher, chunk_create(ipad_key, block_len), NULL))
+	{
+		return FALSE;
+	}
+	if (!hasher->get_hash(hasher, data, inner_hash))
+	{
+		return FALSE;
+	}
+
+	/* Compute outer hash: H(opad_key || inner_hash) */
+	if (!hasher->reset(hasher))
+	{
+		return FALSE;
+	}
+	if (!hasher->get_hash(hasher, chunk_create(opad_key, block_len), NULL))
+	{
+		return FALSE;
+	}
+	if (!hasher->get_hash(hasher, chunk_create(inner_hash, hash_len), mac.ptr))
+	{
+		return FALSE;
+	}
+
+	memwipe(ipad_key, sizeof(ipad_key));
+	memwipe(opad_key, sizeof(opad_key));
+	memwipe(inner_hash, sizeof(inner_hash));
+	return TRUE;
+}
+
+/**
  * Decrypt message m using the stored private key and given ciphertext.
  *
  * Algorithm 14 in FIPS 203.
@@ -788,7 +855,6 @@ static bool generate_keypair(private_key_exchange_t *this, chunk_t *ek)
 	uint8_t dz[2*ML_KEM_SEED_LEN];
 	chunk_t d = chunk_create(dz, ML_KEM_SEED_LEN);
 	chunk_t z = chunk_create(dz + ML_KEM_SEED_LEN, ML_KEM_SEED_LEN);
-	chunk_t Hek;
 	bool success = FALSE;
 
 	/* get random seeds d and z */
@@ -797,12 +863,10 @@ static bool generate_keypair(private_key_exchange_t *this, chunk_t *ek)
 		return FALSE;
 	}
 
-	/* generate a key pair and generate a hash of the latter to be stored
-	 * together with the rejection seed z */
-	if (pke_keygen(this, d, ek) &&
-		this->H->allocate_hash(this->H, *ek, &Hek))
+	/* generate a key pair */
+	if (pke_keygen(this, d, ek))
 	{
-		this->key_data = chunk_cat("mc", Hek, z);
+		this->key_data = chunk_clone(z);
 		success = TRUE;
 	}
 
@@ -833,60 +897,69 @@ METHOD(key_exchange_t, get_public_key, bool,
  */
 static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertext)
 {
-	chunk_t Hek, z, zc, c = chunk_empty;
+	chunk_t z, zct;
 	chunk_t m = chunk_alloca(ML_KEM_SEED_LEN);
-	uint8_t Kr[2*ML_KEM_SEED_LEN];
-	uint8_t *r = Kr + ML_KEM_SEED_LEN;
+	chunk_t tag_computed = chunk_alloca(ML_KEM_TAG_LEN);
+	chunk_t pke_ciphertext, tag_received;
+	uint32_t pke_ct_len;
 	bool success = FALSE;
 
-	/* get the hash of the encoded public key and seed z */
-	chunk_split(this->key_data, "mm",
-				ML_KEM_SEED_LEN, &Hek,
-				ML_KEM_SEED_LEN, &z);
-	/* prepare the seed to derive the implicit rejection secret */
-	zc = chunk_cat("cc", z, ciphertext);
+	/* get rejection seed z */
+	z = this->key_data;
 
-	/* decrypt message m */
-	if (!pke_decrypt(this, ciphertext, m.ptr))
+	/* verify received ciphertext length matches expected (ct_len = pke_ct + mac) */
+	if (ciphertext.len != this->params->ct_len)
+	{
+		DBG1(DBG_LIB, "ciphertext length mismatch: got %u bytes, expected %u bytes",
+			 ciphertext.len, this->params->ct_len);
+		goto err;
+	}
+
+	/* calculate actual PKE ciphertext size */
+	pke_ct_len = this->params->ct_len - ML_KEM_TAG_LEN;
+
+	/* get ciphertext and mac tag */
+	chunk_split(ciphertext, "mm",
+				pke_ct_len, &pke_ciphertext,
+				ML_KEM_TAG_LEN, &tag_received);
+
+	/* prepare the seed to derive the implicit rejection secret (using PKE ciphertext only) */
+	zct = chunk_cat("cc", z, ciphertext);
+
+	/* decrypt message m using only the PKE ciphertext */
+	if (!pke_decrypt(this, pke_ciphertext, m.ptr))
 	{
 		goto err;
 	}
 
-	/* calculate (K, r) = G(m||H(ek)) */
-	if (!this->G->get_hash(this->G, m, NULL) ||
-		!this->G->get_hash(this->G, Hek, Kr))
-	{
-		goto err;
-	}
-
-	/* encrypt the decrypted message again using the derived r */
-	c = chunk_alloc(this->params->ct_len);
-	if (!pke_encrypt(this, chunk_empty, m.ptr, r, c))
+	/* compute HMAC-SHA3-256 over PKE ciphertext with encrypted value */
+	if (!compute_hmac_sha3_256(this->H,
+							   m,
+							   pke_ciphertext,
+							   tag_computed))
 	{
 		goto err;
 	}
 
 	this->shared_secret = chunk_alloc(ML_KEM_SEED_LEN);
 
+	/* replace the rejection seed with real decrypted message based on whether re-computed MAC tag matches the received one, using a constant-time conditional copy to avoid side-channels */
+	memcpy_cond(zct.ptr, m.ptr, this->shared_secret.len,
+				memeq_const(tag_received.ptr, tag_computed.ptr, ML_KEM_TAG_LEN));
+
 	/* calculate the rejection value K_rej = J(z||c) as fallback */
-	if (!this->shake256->set_seed(this->shake256, zc) ||
+	if (!this->shake256->set_seed(this->shake256, zct) ||
 		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
 								   this->shared_secret.ptr))
 	{
 		goto err;
 	}
-	/* replace the shared secret with K based on whether our own ciphertext
-	 * matches what we received (in constant time) */
-	memcpy_cond(this->shared_secret.ptr, Kr, this->shared_secret.len,
-				chunk_equals_const(ciphertext, c));
 
 	success = TRUE;
 
 err:
 	memwipe(m.ptr, m.len);
-	memwipe(Kr, sizeof(Kr));
-	chunk_clear(&zc);
-	chunk_free(&c);
+	chunk_clear(&zct);
 	return success;
 }
 
@@ -898,29 +971,61 @@ err:
 static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 {
 	chunk_t mH = chunk_alloca(2*ML_KEM_SEED_LEN);
-	uint8_t Kr[2*ML_KEM_SEED_LEN];
-	uint8_t *r = Kr + ML_KEM_SEED_LEN;
+	chunk_t pke_ciphertext, mac_tag, mct;
+	uint32_t pke_ct_len;
 	bool success = FALSE;
 
-	/* get a random message and calculate (K, r) = G(m||H(ek)) */
-	if (!get_random(this, ML_KEM_SEED_LEN, mH.ptr) ||
-		!this->H->get_hash(this->H, public, mH.ptr + ML_KEM_SEED_LEN) ||
-		!this->G->get_hash(this->G, mH, Kr))
+	/* get a random message (m, r) */
+	if (!get_random(this, 2*ML_KEM_SEED_LEN, mH.ptr))
 	{
 		goto err;
 	}
 
-	/* encrypt the message using the derived r */
+	/* allocate full buffer (ct_len already includes MAC size) */
 	this->ciphertext = chunk_alloc(this->params->ct_len);
-	if (pke_encrypt(this, public, mH.ptr, r, this->ciphertext))
+	if (!this->ciphertext.ptr)
 	{
-		this->shared_secret = chunk_clone(chunk_create(Kr, ML_KEM_SEED_LEN));
-		success = TRUE;
+		goto err;
 	}
 
+	/* calculate actual PKE ciphertext size */
+	pke_ct_len = this->params->ct_len - ML_KEM_TAG_LEN;
+
+	/* split the buffer into ciphertext and tag */
+	chunk_split(this->ciphertext, "mm",
+				pke_ct_len, &pke_ciphertext,
+				ML_KEM_TAG_LEN, &mac_tag);
+
+	/* encrypt the message using random r */
+	if (!pke_encrypt(this, public, mH.ptr, mH.ptr + ML_KEM_SEED_LEN, pke_ciphertext))
+	{
+		goto err;
+	}
+
+	/* compute HMAC-SHA3-256 authentication tag over ciphertext part */
+	if (!compute_hmac_sha3_256(this->H, 
+						   chunk_create(mH.ptr, ML_KEM_SEED_LEN),
+						   pke_ciphertext, 
+						   mac_tag))
+	{
+		goto err;
+	}
+
+	/* concatenate the key derivation material (using complete KEM ciphertext) */
+	mct = chunk_cat("cc", mH.ptr, this->ciphertext);
+
+	this->shared_secret = chunk_alloc(ML_KEM_SEED_LEN);
+	/* derive K = J(m||ct) */
+	if (!this->shake256->set_seed(this->shake256, mct) ||
+		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
+								   this->shared_secret.ptr))
+	{
+		goto err;
+	}
+	success = TRUE;
+
 err:
-	memwipe(mH.ptr, ML_KEM_SEED_LEN);
-	memwipe(Kr, sizeof(Kr));
+	memwipe(mH.ptr, 2*ML_KEM_SEED_LEN);
 	return success;
 }
 
