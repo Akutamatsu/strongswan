@@ -954,18 +954,17 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 	}
 
 	/* replace the rejection seed with real decrypted message based on whether re-computed MAC tag matches the received one, using a constant-time conditional copy to avoid side-channels */
-	memcpy_cond(zct.ptr, m.ptr, m.len,
-				chunk_equals_const(tag_received, tag_computed));
+	success = chunk_equals_const(tag_received, tag_computed); // explicit rejection
+	memcpy_cond(zct.ptr, m.ptr, m.len, success);
 
 	/* calculate the rejection value K_rej = J(z||c) as fallback */
 	if (!this->shake256->set_seed(this->shake256, zct) ||
 		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
 								   this->shared_secret.ptr))
 	{
+		success = FALSE;
 		goto err;
 	}
-
-	success = TRUE;
 
 err:
 	memwipe(m.ptr, m.len);
