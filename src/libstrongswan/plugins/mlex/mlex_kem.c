@@ -57,7 +57,7 @@ struct private_key_exchange_t {
 	 * Additional key data as initiator (hash of encoded public key,
 	 * rejection seed z).
 	 */
-	chunk_t key_data;
+	// chunk_t key_data;
 
 	/**
 	 * Ciphertext as responder.
@@ -848,17 +848,15 @@ static bool pke_decrypt(private_key_exchange_t *this, chunk_t ciphertext,
 /**
  * Get random seeds and generate a key pair.
  *
- * Algorithm 16/19 in FIPS 203.
+ * removing implicit rejection seed 'z' in sk
  */
 static bool generate_keypair(private_key_exchange_t *this, chunk_t *ek)
 {
-	uint8_t dz[2*ML_KEM_SEED_LEN];
-	chunk_t d = chunk_create(dz, ML_KEM_SEED_LEN);
-	chunk_t z = chunk_create(dz + ML_KEM_SEED_LEN, ML_KEM_SEED_LEN);
+	chunk_t d = chunk_alloca(ML_KEM_SEED_LEN);
 	bool success = FALSE;
 
-	/* get random seeds d and z */
-	if (!get_random(this, sizeof(dz), dz))
+	/* get random seeds d */
+	if (!get_random(this, d.len, d.ptr))
 	{
 		return FALSE;
 	}
@@ -866,11 +864,10 @@ static bool generate_keypair(private_key_exchange_t *this, chunk_t *ek)
 	/* generate a key pair */
 	if (pke_keygen(this, d, ek))
 	{
-		this->key_data = chunk_clone(z);
 		success = TRUE;
 	}
 
-	memwipe(dz, sizeof(dz));
+	memwipe(d.ptr, d.len);
 	return success;
 }
 
@@ -897,15 +894,11 @@ METHOD(key_exchange_t, get_public_key, bool,
  */
 static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertext)
 {
-	chunk_t z, zct;
 	chunk_t m = chunk_alloca(ML_KEM_SEED_LEN);
 	chunk_t tag_computed = chunk_alloca(ML_KEM_TAG_LEN);
 	chunk_t pke_ciphertext, tag_received;
 	uint32_t pke_ct_len;
 	bool success = FALSE;
-
-	/* get rejection seed z */
-	z = this->key_data;
 
 	/* verify received ciphertext length matches expected (ct_len = pke_ct + mac) */
 	if (ciphertext.len != this->params->ct_len)
@@ -922,14 +915,6 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 	chunk_split(ciphertext, "mm",
 				pke_ct_len, &pke_ciphertext,
 				ML_KEM_TAG_LEN, &tag_received);
-
-	/* prepare the seed to derive the implicit rejection secret (using PKE ciphertext only) */
-	zct = chunk_cat("cc", z, ciphertext);
-	if (!zct.ptr)
-	{
-		DBG1(DBG_LIB, "failed to concatenate z and ciphertext");
-		goto err;
-	}
 
 	/* decrypt message m using only the PKE ciphertext */
 	if (!pke_decrypt(this, pke_ciphertext, m.ptr))
@@ -955,12 +940,14 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 
 	/* replace the rejection seed with real decrypted message based on whether re-computed MAC tag matches the received one, using a constant-time conditional copy to avoid side-channels */
 	success = chunk_equals_const(tag_received, tag_computed); // explicit rejection
-	memcpy_cond(zct.ptr, m.ptr, m.len, success);
+    if (!success)
+    {
+        DBG1(DBG_LIB, "MAC tag mismatch: ciphertext rejected");
+        goto err;
+    }
 
-	/* calculate the rejection value K_rej = J(z||c) as fallback */
-	if (!this->shake256->set_seed(this->shake256, zct) ||
-		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
-								   this->shared_secret.ptr))
+	/* derive K = H(m) */
+	if (!this->H->get_hash(this->H, m, this->shared_secret.ptr))
 	{
 		success = FALSE;
 		goto err;
@@ -968,7 +955,6 @@ static bool decaps_shared_secret(private_key_exchange_t *this, chunk_t ciphertex
 
 err:
 	memwipe(m.ptr, m.len);
-	chunk_clear(&zct);
 	return success;
 }
 
@@ -980,7 +966,7 @@ err:
 static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 {
 	chunk_t mr = chunk_alloca(2*ML_KEM_SEED_LEN);
-	chunk_t m, r, pke_ciphertext, mac_tag, mct;
+	chunk_t m, r, pke_ciphertext, mac_tag;
 	uint32_t pke_ct_len;
 	bool success = FALSE;
 
@@ -1025,24 +1011,14 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 		goto err;
 	}
 
-	/* concatenate the key derivation material (using complete KEM ciphertext) */
-	mct = chunk_cat("cc", m, this->ciphertext);
-	if (!mct.ptr)
-	{
-		DBG1(DBG_LIB, "failed to concatenate KDF material");
-		goto err;
-	}
-
 	this->shared_secret = chunk_alloc(ML_KEM_SEED_LEN);
 	if (!this->shared_secret.ptr)
 	{
 		DBG1(DBG_LIB, "failed to allocate shared secret");
 		goto err;
 	}
-	/* derive K = J(m||ct) */
-	if (!this->shake256->set_seed(this->shake256, mct) ||
-		!this->shake256->get_bytes(this->shake256, this->shared_secret.len,
-								   this->shared_secret.ptr))
+	/* derive K = H(m) */
+	if (!this->H->get_hash(this->H, m, this->shared_secret.ptr))
 	{
 		goto err;
 	}
@@ -1050,7 +1026,6 @@ static bool encaps_shared_secret(private_key_exchange_t *this, chunk_t public)
 
 err:
 	memwipe(mr.ptr, 2*ML_KEM_SEED_LEN);
-	chunk_clear(&mct);
 	return success;
 }
 
@@ -1137,7 +1112,7 @@ METHOD(key_exchange_t, destroy, void,
 	private_key_exchange_t *this)
 {
 	chunk_clear(&this->private_key);
-	chunk_clear(&this->key_data);
+	// chunk_clear(&this->key_data);
 	chunk_clear(&this->shared_secret);
 	chunk_free(&this->public_key);
 	chunk_free(&this->ciphertext);
