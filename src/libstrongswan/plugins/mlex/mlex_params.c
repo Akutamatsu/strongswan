@@ -108,11 +108,11 @@ static const mlex_kem_params_t mlex_kem_params[] = {
 		.k = 4,
 		.eta1 = 2,
 		.eta2 = 2,
-        .dt = 8, // added
-		.du = 9,
+        .dt = 9, // added
+		.du = 8,
 		.dv = 3,
-		.pk_len = 1056,
-		.ct_len = 1280,
+		.pk_len = 1184,
+		.ct_len = 1152,
 	},
 };
 
